@@ -65,7 +65,7 @@ interface Food {
 
 interface FoodOrder extends Food {
   product_id: number;
-  quantity: number;
+  'food-quantity': number;
 }
 
 const FoodDetails: React.FC = () => {
@@ -82,10 +82,8 @@ const FoodDetails: React.FC = () => {
 
   useEffect(() => {
     async function loadFood(): Promise<void> {
-      let response = await api.get('foods', {
-        params: { id: routeParams.id },
-      });
-      const responseFood = response.data[0] as Food;
+      let response = await api.get(`/foods/${routeParams.id}`);
+      const responseFood = response.data as Food;
 
       response = await api.get('favorites');
       const favoriteFoods = response.data as Food[];
@@ -104,6 +102,7 @@ const FoodDetails: React.FC = () => {
       const formattedFood = {
         ...responseFood,
         formattedPrice: formatValue(responseFood.price),
+        'food-quantity': 1,
       };
 
       setFood(formattedFood);
@@ -182,7 +181,7 @@ const FoodDetails: React.FC = () => {
     const finishedOrder: FoodOrder = {
       ...food,
       product_id: food.id,
-      quantity: foodQuantity,
+      'food-quantity': foodQuantity,
       extras: { ...extrasFiltered },
       formattedPrice: cartTotal,
     };
