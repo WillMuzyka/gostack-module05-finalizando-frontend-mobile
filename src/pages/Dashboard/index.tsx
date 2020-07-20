@@ -95,10 +95,15 @@ const Dashboard: React.FC = () => {
   }, [foods, searchValue]);
 
   function handleSelectCategory(id: number): void {
-    setSelectedCategory(id);
-    const filteredFoods = foods.filter(food => food.category === id);
+    if (id === selectedCategory) {
+      setSelectedCategory(undefined);
+      setFoodsFiltered([...foods]);
+    } else {
+      setSelectedCategory(id);
+      const filteredFoods = foods.filter(food => food.category === id);
 
-    setFoodsFiltered(filteredFoods);
+      setFoodsFiltered(filteredFoods);
+    }
   }
 
   return (
