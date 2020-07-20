@@ -37,6 +37,8 @@ import {
   FinishOrderButton,
   ButtonText,
   IconContainer,
+  OrderSuccesfulContainer,
+  OrderSuccesfulMessage,
 } from './styles';
 
 interface Params {
@@ -56,8 +58,14 @@ interface Food {
   description: string;
   price: number;
   image_url: string;
+  thumbnail_url: string;
   formattedPrice: string;
   extras: Extra[];
+}
+
+interface FoodOrder extends Food {
+  product_id: number;
+  quantity: number;
 }
 
 const FoodDetails: React.FC = () => {
@@ -65,6 +73,7 @@ const FoodDetails: React.FC = () => {
   const [extras, setExtras] = useState<Extra[]>([]);
   const [isFavorite, setIsFavorite] = useState(false);
   const [foodQuantity, setFoodQuantity] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
 
   const navigation = useNavigation();
   const route = useRoute();
@@ -73,38 +82,119 @@ const FoodDetails: React.FC = () => {
 
   useEffect(() => {
     async function loadFood(): Promise<void> {
-      // Load a specific food with extras based on routeParams id
+      let response = await api.get('foods', {
+        params: { id: routeParams.id },
+      });
+      const responseFood = response.data[0] as Food;
+
+      response = await api.get('favorites');
+      const favoriteFoods = response.data as Food[];
+      const isAlreadyFavorite = favoriteFoods.find(
+        fav => fav.id === responseFood.id,
+      );
+      if (isAlreadyFavorite) {
+        setIsFavorite(true);
+      }
+
+      const formattedExtras = responseFood.extras.map(extra => ({
+        ...extra,
+        quantity: 0,
+      }));
+
+      const formattedFood = {
+        ...responseFood,
+        formattedPrice: formatValue(responseFood.price),
+      };
+
+      setFood(formattedFood);
+      setExtras(formattedExtras);
     }
 
     loadFood();
   }, [routeParams]);
 
   function handleIncrementExtra(id: number): void {
-    // Increment extra quantity
+    const extraIndexBeingChanged = extras.findIndex(extra => extra.id === id);
+    if (extraIndexBeingChanged < 0) {
+      return;
+    }
+
+    const extraBeingChanged = extras[extraIndexBeingChanged];
+    extraBeingChanged.quantity += 1;
+
+    const newExtras = extras;
+    newExtras.splice(extraIndexBeingChanged, 1, extraBeingChanged);
+    setExtras([...newExtras]);
   }
 
   function handleDecrementExtra(id: number): void {
-    // Decrement extra quantity
+    const extraIndexBeingChanged = extras.findIndex(extra => extra.id === id);
+    if (extraIndexBeingChanged < 0) {
+      return;
+    }
+
+    const extraBeingChanged = extras[extraIndexBeingChanged];
+    if (extraBeingChanged.quantity <= 0) {
+      return;
+    }
+
+    extraBeingChanged.quantity -= 1;
+
+    const newExtras = extras;
+    newExtras.splice(extraIndexBeingChanged, 1, extraBeingChanged);
+    setExtras([...newExtras]);
   }
 
-  function handleIncrementFood(): void {
-    // Increment food quantity
-  }
+  const handleIncrementFood = useCallback((): void => {
+    setFoodQuantity(value => value + 1);
+  }, []);
 
-  function handleDecrementFood(): void {
-    // Decrement food quantity
-  }
+  const handleDecrementFood = useCallback((): void => {
+    setFoodQuantity(value => (value > 1 ? value - 1 : value));
+  }, []);
 
-  const toggleFavorite = useCallback(() => {
-    // Toggle if food is favorite or not
+  const toggleFavorite = useCallback(async () => {
+    if (isFavorite) {
+      await api.delete(`favorites/${food.id}`);
+    } else {
+      const newFood = { ...food };
+      delete newFood.formattedPrice;
+      delete newFood.extras;
+
+      await api.post('favorites', newFood);
+    }
+    setIsFavorite(value => !value);
   }, [isFavorite, food]);
 
   const cartTotal = useMemo(() => {
-    // Calculate cartTotal
+    const extraPrice = extras.reduce(
+      (sum, extra) => sum + extra.value * extra.quantity,
+      0,
+    );
+
+    const price = (food.price + extraPrice) * foodQuantity;
+
+    return formatValue(price);
   }, [extras, food, foodQuantity]);
 
   async function handleFinishOrder(): Promise<void> {
-    // Finish the order and save on the API
+    const extrasFiltered = extras.filter(extra => extra.quantity > 0);
+    const finishedOrder: FoodOrder = {
+      ...food,
+      product_id: food.id,
+      quantity: foodQuantity,
+      extras: { ...extrasFiltered },
+      formattedPrice: cartTotal,
+    };
+    delete finishedOrder.id;
+
+    await api.post('orders', finishedOrder);
+
+    setIsLoading(true);
+    setTimeout(() => {
+      setIsLoading(false);
+      navigation.navigate('MainBottom');
+    }, 2000);
   }
 
   // Calculate the correct icon name
@@ -127,89 +217,104 @@ const FoodDetails: React.FC = () => {
     });
   }, [navigation, favoriteIconName, toggleFavorite]);
 
-  return (
-    <Container>
-      <Header />
+  useLayoutEffect(() => {
+    // Toggle header bar when finishing buy
+    navigation.setOptions({
+      headerShown: !isLoading,
+    });
+  }, [navigation, isLoading]);
 
-      <ScrollContainer>
-        <FoodsContainer>
-          <Food>
-            <FoodImageContainer>
-              <Image
-                style={{ width: 327, height: 183 }}
-                source={{
-                  uri: food.image_url,
-                }}
-              />
-            </FoodImageContainer>
-            <FoodContent>
-              <FoodTitle>{food.name}</FoodTitle>
-              <FoodDescription>{food.description}</FoodDescription>
-              <FoodPricing>{food.formattedPrice}</FoodPricing>
-            </FoodContent>
-          </Food>
-        </FoodsContainer>
-        <AdditionalsContainer>
-          <Title>Adicionais</Title>
-          {extras.map(extra => (
-            <AdittionalItem key={extra.id}>
-              <AdittionalItemText>{extra.name}</AdittionalItemText>
-              <AdittionalQuantity>
+  return (
+    <>
+      <Container>
+        <Header />
+
+        <ScrollContainer>
+          <FoodsContainer>
+            <Food>
+              <FoodImageContainer>
+                <Image
+                  style={{ width: 327, height: 183 }}
+                  source={{
+                    uri: food.image_url,
+                  }}
+                />
+              </FoodImageContainer>
+              <FoodContent>
+                <FoodTitle>{food.name}</FoodTitle>
+                <FoodDescription>{food.description}</FoodDescription>
+                <FoodPricing>{food.formattedPrice}</FoodPricing>
+              </FoodContent>
+            </Food>
+          </FoodsContainer>
+          <AdditionalsContainer>
+            <Title>Adicionais</Title>
+            {extras.map(extra => (
+              <AdittionalItem key={extra.id}>
+                <AdittionalItemText>{extra.name}</AdittionalItemText>
+                <AdittionalQuantity>
+                  <Icon
+                    size={15}
+                    color="#6C6C80"
+                    name="minus"
+                    onPress={() => handleDecrementExtra(extra.id)}
+                    testID={`decrement-extra-${extra.id}`}
+                  />
+                  <AdittionalItemText testID={`extra-quantity-${extra.id}`}>
+                    {extra.quantity}
+                  </AdittionalItemText>
+                  <Icon
+                    size={15}
+                    color="#6C6C80"
+                    name="plus"
+                    onPress={() => handleIncrementExtra(extra.id)}
+                    testID={`increment-extra-${extra.id}`}
+                  />
+                </AdittionalQuantity>
+              </AdittionalItem>
+            ))}
+          </AdditionalsContainer>
+          <TotalContainer>
+            <Title>Total do pedido</Title>
+            <PriceButtonContainer>
+              <TotalPrice testID="cart-total">{cartTotal}</TotalPrice>
+              <QuantityContainer>
                 <Icon
                   size={15}
                   color="#6C6C80"
                   name="minus"
-                  onPress={() => handleDecrementExtra(extra.id)}
-                  testID={`decrement-extra-${extra.id}`}
+                  onPress={handleDecrementFood}
+                  testID="decrement-food"
                 />
-                <AdittionalItemText testID={`extra-quantity-${extra.id}`}>
-                  {extra.quantity}
+                <AdittionalItemText testID="food-quantity">
+                  {foodQuantity}
                 </AdittionalItemText>
                 <Icon
                   size={15}
                   color="#6C6C80"
                   name="plus"
-                  onPress={() => handleIncrementExtra(extra.id)}
-                  testID={`increment-extra-${extra.id}`}
+                  onPress={handleIncrementFood}
+                  testID="increment-food"
                 />
-              </AdittionalQuantity>
-            </AdittionalItem>
-          ))}
-        </AdditionalsContainer>
-        <TotalContainer>
-          <Title>Total do pedido</Title>
-          <PriceButtonContainer>
-            <TotalPrice testID="cart-total">{cartTotal}</TotalPrice>
-            <QuantityContainer>
-              <Icon
-                size={15}
-                color="#6C6C80"
-                name="minus"
-                onPress={handleDecrementFood}
-                testID="decrement-food"
-              />
-              <AdittionalItemText testID="food-quantity">
-                {foodQuantity}
-              </AdittionalItemText>
-              <Icon
-                size={15}
-                color="#6C6C80"
-                name="plus"
-                onPress={handleIncrementFood}
-                testID="increment-food"
-              />
-            </QuantityContainer>
-          </PriceButtonContainer>
+              </QuantityContainer>
+            </PriceButtonContainer>
 
-          <FinishOrderButton onPress={() => handleFinishOrder()}>
-            <ButtonText>Confirmar pedido</ButtonText>
-            <IconContainer>
-              <Icon name="check-square" size={24} color="#fff" />
-            </IconContainer>
-          </FinishOrderButton>
-        </TotalContainer>
-      </ScrollContainer>
-    </Container>
+            <FinishOrderButton onPress={() => handleFinishOrder()}>
+              <ButtonText>Confirmar pedido</ButtonText>
+              <IconContainer>
+                <Icon name="check-square" size={24} color="#fff" />
+              </IconContainer>
+            </FinishOrderButton>
+          </TotalContainer>
+        </ScrollContainer>
+      </Container>
+      {isLoading && (
+        <OrderSuccesfulContainer>
+          <Icon size={42} color="#39b100" name="thumbs-up" />
+          <OrderSuccesfulMessage>Pedido Confirmado!</OrderSuccesfulMessage>
+        </OrderSuccesfulContainer>
+      )}
+    </>
   );
 };
 

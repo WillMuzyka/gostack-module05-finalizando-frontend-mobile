@@ -171,3 +171,24 @@ export const IconContainer = styled.View`
   border-top-right-radius: 8px;
   border-bottom-right-radius: 8px;
 `;
+
+export const OrderSuccesfulContainer = styled.View`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+
+  background-color: #0009;
+  align-items: center;
+  justify-content: center;
+`;
+
+export const OrderSuccesfulMessage = styled.Text`
+  color: #fff;
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-size: 24px;
+  margin-top: 28px;
+`;

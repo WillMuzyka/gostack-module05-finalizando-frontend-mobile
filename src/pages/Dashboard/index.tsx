@@ -35,6 +35,7 @@ interface Food {
   price: number;
   thumbnail_url: string;
   formattedPrice: string;
+  category: number;
 }
 
 interface Category {
@@ -45,6 +46,7 @@ interface Category {
 
 const Dashboard: React.FC = () => {
   const [foods, setFoods] = useState<Food[]>([]);
+  const [foodsFiltered, setFoodsFiltered] = useState<Food[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<
     number | undefined
@@ -54,27 +56,49 @@ const Dashboard: React.FC = () => {
   const navigation = useNavigation();
 
   async function handleNavigate(id: number): Promise<void> {
-    // Navigate do ProductDetails page
+    navigation.navigate('FoodDetails', { id });
   }
 
   useEffect(() => {
     async function loadFoods(): Promise<void> {
-      // Load Foods from API
+      const response = await api.get('foods');
+      const responseFoods = response.data as Food[];
+
+      const formattedFoods = responseFoods.map(food => ({
+        ...food,
+        formattedPrice: formatValue(food.price),
+      }));
+
+      setFoods(formattedFoods);
+      setFoodsFiltered(formattedFoods);
     }
 
     loadFoods();
-  }, [selectedCategory, searchValue]);
+  }, []);
 
   useEffect(() => {
     async function loadCategories(): Promise<void> {
-      // Load categories from API
+      const response = await api.get('categories');
+
+      setCategories(response.data);
     }
 
     loadCategories();
   }, []);
 
+  useEffect(() => {
+    const filteredFood = foods.filter(
+      food =>
+        food.name.toLowerCase().includes(searchValue.toLowerCase()) === true,
+    );
+    setFoodsFiltered(filteredFood);
+  }, [foods, searchValue]);
+
   function handleSelectCategory(id: number): void {
-    // Select / deselect category
+    setSelectedCategory(id);
+    const filteredFoods = foods.filter(food => food.category === id);
+
+    setFoodsFiltered(filteredFoods);
   }
 
   return (
@@ -125,7 +149,7 @@ const Dashboard: React.FC = () => {
         <FoodsContainer>
           <Title>Pratos</Title>
           <FoodList>
-            {foods.map(food => (
+            {foodsFiltered.map(food => (
               <Food
                 key={food.id}
                 onPress={() => handleNavigate(food.id)}
